@@ -1,0 +1,62 @@
+/* Grid container styles */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 5 images per row */
+  gap: 0; /* No gaps between rows or columns */
+  padding: 0;
+  margin: 0;
+  width: 100vw; /* Full viewport width */
+  height: 100vh; /* Full viewport height */
+}
+
+/* Grid item styles */
+.grid-item {
+  position: relative;
+  width: 100%;
+  height: calc(100vh / 5); /* Divide viewport height into 5 equal rows */
+  overflow: hidden;
+}
+
+/* Image wrapper */
+.image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Image styles */
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  opacity: 1;
+  transition: opacity 1s ease-in-out; /* Smooth fade effect */
+}
+
+/* Grayscale image */
+.image.grayscale {
+  z-index: 1;
+  opacity: 1;
+}
+
+/* Colored image */
+.image.colored {
+  z-index: 2;
+  opacity: 0; /* Initially hidden */
+}
+
+/* Transition state */
+.image-wrapper.transitioned .grayscale {
+  opacity: 0; /* Fade out grayscale */
+}
+
+.image-wrapper.transitioned .colored {
+  opacity: 1; /* Fade in colored */
+}
+
+.image-block img {
+  width: 100%;
+  height: auto;
+  transition: transform 0.5s ease-in-out;
+}
