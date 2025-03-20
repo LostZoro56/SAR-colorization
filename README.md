@@ -31,7 +31,7 @@ Our approach follows a structured pipeline:
 
 ##  architecture diagram 
 
-![Model Architecture](architecture diagram.png)
+![Model Architecture]([architecture diagram.pn](https://github.com/LostZoro56/SAR-colorization/blob/360f1bd5a57c6bd4ae9122c8f285e75aa489f0dc/architecture%20diagram.png))
 
 
 ### 4️⃣ **Feasibility and Viability**
