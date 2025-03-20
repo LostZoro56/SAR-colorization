@@ -55,26 +55,6 @@ Our approach follows a structured pipeline:
 - **Economic:** Reduces manual analysis efforts and improves efficiency in remote sensing applications.
 - **Environmental:** Better monitoring of environmental changes (e.g., deforestation) with more informative visual data.
 
-### 📈 **Future Improvements**
-- Implement **GANs for better colorization**
-- Reduce **dependency on optical images**
-- Use **self-supervised learning methods**
-
-## 🔧 Setup & Installation
-Clone the repository and install dependencies:
-```bash
-git clone https://github.com/your-username/sar-image-colorization.git
-cd sar-image-colorization
-pip install -r requirements.txt
-```
-
-Run the model:
-```bash
-python train.py --epochs 100 --batch_size 16
-```
-
-## 📜 License
-This project is licensed under the MIT License.
 
 ## 📚 Research & References
 - [Text-Guided Image Colorization Using Conditional Generative Model](https://shorturl.at/3auE5)
