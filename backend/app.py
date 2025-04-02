@@ -20,9 +20,7 @@ CORS(app)
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'processed'
-KAGGLE_API_URL = os.getenv('KAGGLE_API_URL')  # Your Kaggle notebook URL
-KAGGLE_USERNAME = os.getenv('KAGGLE_USERNAME')
-KAGGLE_KEY = os.getenv('KAGGLE_KEY')
+MODEL_SERVER_URL = os.getenv('MODEL_SERVER_URL', 'http://localhost:8000')
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -66,8 +64,8 @@ def upload_image():
             'start_time': time.time()
         }
         
-        # Forward to Kaggle model
-        forward_to_kaggle(file_path, unique_id)
+        # Forward to model server
+        forward_to_model(file_path, unique_id)
         
         return jsonify({
             'jobId': unique_id,
@@ -124,48 +122,47 @@ def get_processed_image(job_id):
         download_name=f'colorized_{job_id}.jpg'
     )
 
-def forward_to_kaggle(file_path, job_id):
+def forward_to_model(file_path, job_id):
     try:
-        # Encode image to base64
-        image_base64 = encode_image_to_base64(file_path)
+        # Prepare the file for upload
+        files = {'file': ('image.jpg', open(file_path, 'rb'), 'image/jpeg')}
         
-        # Prepare request to Kaggle
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Basic {base64.b64encode(f"{KAGGLE_USERNAME}:{KAGGLE_KEY}".encode()).decode()}'
-        }
-        
-        payload = {
-            'image': image_base64,
-            'job_id': job_id
-        }
-        
-        # Send request to Kaggle notebook
+        # Send request to model server
+        print(f"Sending request to {MODEL_SERVER_URL}/process")
         response = requests.post(
-            KAGGLE_API_URL,
-            headers=headers,
-            json=payload
+            f"{MODEL_SERVER_URL}/process",
+            files=files
         )
+        
+        print(f"Model server response status: {response.status_code}")
+        print(f"Model server response: {response.text}")
         
         if response.status_code == 200:
             try:
                 result = response.json()
-                if 'colorized_image' in result:
-                    # Decode and save the colorized image
+                if 'imageUrl' in result:
+                    # Download the processed image
                     processed_filename = f"processed_{job_id}.jpg"
                     processed_path = os.path.join(PROCESSED_FOLDER, processed_filename)
                     
-                    # Convert base64 to image and save
-                    colorized_image = decode_base64_to_image(result['colorized_image'])
-                    colorized_image.save(processed_path, 'JPEG')
+                    # Get the image from model server
+                    image_url = f"{MODEL_SERVER_URL}{result['imageUrl']}"
+                    print(f"Downloading processed image from: {image_url}")
+                    image_response = requests.get(image_url)
                     
-                    # Update status
-                    processing_status[job_id].update({
-                        'status': 'completed',
-                        'image_path': processed_path
-                    })
+                    if image_response.status_code == 200:
+                        with open(processed_path, 'wb') as f:
+                            f.write(image_response.content)
+                        
+                        # Update status
+                        processing_status[job_id].update({
+                            'status': 'completed',
+                            'image_path': processed_path
+                        })
+                    else:
+                        raise Exception(f'Failed to download processed image: {image_response.status_code} {image_response.text}')
                 else:
-                    raise Exception('No colorized image in response')
+                    raise Exception('No image URL in response')
             except Exception as e:
                 processing_status[job_id].update({
                     'status': 'failed',
@@ -174,7 +171,7 @@ def forward_to_kaggle(file_path, job_id):
         else:
             processing_status[job_id].update({
                 'status': 'failed',
-                'error': f'Kaggle API error: {response.text}'
+                'error': f'Model server error: {response.text}'
             })
                 
     except Exception as e:

@@ -8,46 +8,71 @@ export default function Navbar() {
     return location.pathname === path;
   };
   
-  const navLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/colorize', label: 'Colorizer' },
-    { path: '/about', label: 'About' },
-    { path: '/contact', label: 'Contact' },
-  ];
-  
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800">
+    <nav className="fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center">
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
-              SAR Colorizer
-            </span>
-          </Link>
-
-          {/* Navigation Links */}
-          <div className="hidden md:flex space-x-8">
-            {navLinks.map((link) => (
+          <div className="flex items-center">
+            <Link to="/" className="text-xl font-bold text-white">
+              SAR Colorization
+            </Link>
+          </div>
+          
+          <div className="hidden md:block">
+            <div className="ml-10 flex items-baseline space-x-4">
               <Link
-                key={link.path}
-                to={link.path}
-                className={`${
-                  isActive(link.path)
-                    ? 'text-blue-400'
-                    : 'text-gray-300 hover:text-white'
-                } transition-colors duration-200`}
+                to="/"
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/')
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
               >
-                {link.label}
+                Home
               </Link>
-            ))}
+              <Link
+                to="/colorize"
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/colorize')
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                Colorize
+              </Link>
+              <Link
+                to="/about"
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/about')
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                About
+              </Link>
+              <Link
+                to="/contact"
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/contact')
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                Contact
+              </Link>
+            </div>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile menu button */}
           <div className="md:hidden">
-            <button className="text-gray-300 hover:text-white p-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
+            >
+              <span className="sr-only">Open main menu</span>
               <svg
-                className="h-6 w-6"
+                className="block h-6 w-6"
+                xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"

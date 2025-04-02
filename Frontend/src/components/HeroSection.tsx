@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AnimatedText from './AnimatedText';
 
 export default function HeroSection() {
   const navigate = useNavigate();
@@ -66,9 +67,10 @@ export default function HeroSection() {
           <div className="max-w-2xl mx-auto lg:mx-0 select-none">
             <h1 className="text-5xl md:text-6xl font-bold text-white mb-8 leading-tight">
               Transform SAR Images into{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-                Colorized Insights
-              </span>
+              <AnimatedText
+                text="Colorized Insights"
+                className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500"
+              />
             </h1>
             <p className="text-xl text-gray-300 mb-10">
               Experience the power of AI-driven colorization technology that brings your SAR imagery to life. 
