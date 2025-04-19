@@ -20,7 +20,8 @@ CORS(app)
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'processed'
-MODEL_SERVER_URL = os.getenv('MODEL_SERVER_URL', 'http://localhost:8000')
+# Use Kaggle notebook URL instead of local model server
+KAGGLE_MODEL_URL = os.getenv('KAGGLE_MODEL_URL', 'https://your-kaggle-notebook-url.kaggle.net')
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -64,8 +65,8 @@ def upload_image():
             'start_time': time.time()
         }
         
-        # Forward to model server
-        forward_to_model(file_path, unique_id)
+        # Forward to Kaggle model server
+        forward_to_kaggle(file_path, unique_id)
         
         return jsonify({
             'jobId': unique_id,
@@ -74,6 +75,46 @@ def upload_image():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def forward_to_kaggle(file_path, job_id):
+    try:
+        # Prepare the file for upload to Kaggle
+        files = {'image': open(file_path, 'rb')}
+        
+        # Send request to Kaggle model server
+        response = requests.post(f"{KAGGLE_MODEL_URL}/api/colorize", files=files)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success') and data.get('colorizedImageUrl'):
+                # Download the colorized image from Kaggle
+                colorized_url = f"{KAGGLE_MODEL_URL}{data['colorizedImageUrl']}"
+                colorized_response = requests.get(colorized_url)
+                
+                if colorized_response.status_code == 200:
+                    # Save the colorized image
+                    output_filename = f"{job_id}_colorized.png"
+                    output_path = os.path.join(PROCESSED_FOLDER, output_filename)
+                    
+                    with open(output_path, 'wb') as f:
+                        f.write(colorized_response.content)
+                    
+                    # Update processing status
+                    processing_status[job_id]['status'] = 'completed'
+                    processing_status[job_id]['image_path'] = output_path
+                else:
+                    processing_status[job_id]['status'] = 'failed'
+                    processing_status[job_id]['error'] = 'Failed to download colorized image'
+            else:
+                processing_status[job_id]['status'] = 'failed'
+                processing_status[job_id]['error'] = 'Invalid response from model server'
+        else:
+            processing_status[job_id]['status'] = 'failed'
+            processing_status[job_id]['error'] = f'Model server error: {response.text}'
+            
+    except Exception as e:
+        processing_status[job_id]['status'] = 'failed'
+        processing_status[job_id]['error'] = str(e)
 
 @app.route('/api/status/<job_id>', methods=['GET'])
 def get_status(job_id):
@@ -85,7 +126,7 @@ def get_status(job_id):
     if status_info['status'] == 'completed':
         return jsonify({
             'status': 'completed',
-            'imageUrl': f'/api/processed/{job_id}'
+            'imageUrl': f'/api/processed/{job_id}_colorized.png'
         })
     elif status_info['status'] == 'failed':
         return jsonify({
@@ -103,82 +144,16 @@ def get_status(job_id):
             })
         
         return jsonify({
-            'status': 'processing'
+            'status': 'processing',
+            'message': 'Image is being processed'
         })
 
-@app.route('/api/processed/<job_id>', methods=['GET'])
-def get_processed_image(job_id):
-    if job_id not in processing_status:
-        return jsonify({'error': 'Job not found'}), 404
-    
-    status_info = processing_status[job_id]
-    if status_info['status'] != 'completed':
-        return jsonify({'error': 'Image not ready'}), 400
-    
-    return send_file(
-        status_info['image_path'],
-        mimetype='image/jpeg',
-        as_attachment=True,
-        download_name=f'colorized_{job_id}.jpg'
-    )
-
-def forward_to_model(file_path, job_id):
+@app.route('/api/processed/<filename>', methods=['GET'])
+def get_processed_image(filename):
     try:
-        # Prepare the file for upload
-        files = {'file': ('image.jpg', open(file_path, 'rb'), 'image/jpeg')}
-        
-        # Send request to model server
-        print(f"Sending request to {MODEL_SERVER_URL}/process")
-        response = requests.post(
-            f"{MODEL_SERVER_URL}/process",
-            files=files
-        )
-        
-        print(f"Model server response status: {response.status_code}")
-        print(f"Model server response: {response.text}")
-        
-        if response.status_code == 200:
-            try:
-                result = response.json()
-                if 'imageUrl' in result:
-                    # Download the processed image
-                    processed_filename = f"processed_{job_id}.jpg"
-                    processed_path = os.path.join(PROCESSED_FOLDER, processed_filename)
-                    
-                    # Get the image from model server
-                    image_url = f"{MODEL_SERVER_URL}{result['imageUrl']}"
-                    print(f"Downloading processed image from: {image_url}")
-                    image_response = requests.get(image_url)
-                    
-                    if image_response.status_code == 200:
-                        with open(processed_path, 'wb') as f:
-                            f.write(image_response.content)
-                        
-                        # Update status
-                        processing_status[job_id].update({
-                            'status': 'completed',
-                            'image_path': processed_path
-                        })
-                    else:
-                        raise Exception(f'Failed to download processed image: {image_response.status_code} {image_response.text}')
-                else:
-                    raise Exception('No image URL in response')
-            except Exception as e:
-                processing_status[job_id].update({
-                    'status': 'failed',
-                    'error': f'Failed to process response: {str(e)}'
-                })
-        else:
-            processing_status[job_id].update({
-                'status': 'failed',
-                'error': f'Model server error: {response.text}'
-            })
-                
+        return send_file(os.path.join(PROCESSED_FOLDER, filename))
     except Exception as e:
-        processing_status[job_id].update({
-            'status': 'failed',
-            'error': str(e)
-        })
+        return jsonify({'error': str(e)}), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5000) 

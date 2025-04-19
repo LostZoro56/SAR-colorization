@@ -3,7 +3,8 @@ import { useDropzone } from 'react-dropzone';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5002/api';
+// Try different ports if one fails
+const PORTS = [5001, 5002, 5003, 5004, 5005];
 
 export default function ColorizePage() {
   const [image, setImage] = useState<File | null>(null);
@@ -15,14 +16,6 @@ export default function ColorizePage() {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
-      if (file.size > 10 * 1024 * 1024) {
-        setError('File size must be less than 10MB');
-        return;
-      }
-      if (!file.type.startsWith('image/')) {
-        setError('Please upload an image file');
-        return;
-      }
       setImage(file);
       setPreview(URL.createObjectURL(file));
       setProcessedImage(null);
@@ -38,69 +31,38 @@ export default function ColorizePage() {
     maxFiles: 1
   });
 
-  const handleColorize = async () => {
+  const handleProcess = async () => {
     if (!image) return;
     
     setIsProcessing(true);
     setError(null);
 
-    try {
-      const formData = new FormData();
-      formData.append('file', image);
+    // Try each port until one works
+    for (const port of PORTS) {
+      try {
+        const formData = new FormData();
+        formData.append('file', image);
 
-      console.log('Uploading image to backend...');
-      const response = await axios.post(`${API_BASE_URL}/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total!);
-          console.log(`Upload progress: ${percentCompleted}%`);
-        },
-      });
+        const response = await axios.post(`http://localhost:${port}/process`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 5000, // 5 second timeout
+        });
 
-      console.log('Upload response:', response.data);
-      if (response.data.colorizedImageUrl) {
-        setProcessedImage(response.data.colorizedImageUrl);
-        setIsProcessing(false);
-      } else {
-        throw new Error('No colorized image URL in response');
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      if (axios.isAxiosError(err)) {
-        if (err.response) {
-          setError(`Server error: ${err.response.data.error || 'Failed to upload image'}`);
-        } else if (err.request) {
-          setError('No response from server. Please check if the backend is running.');
-        } else {
-          setError(`Error: ${err.message}`);
+        if (response.data.imageUrl) {
+          setProcessedImage(`http://localhost:${port}${response.data.imageUrl}`);
+          setIsProcessing(false);
+          return;
         }
-      } else {
-        setError('Failed to upload image. Please try again.');
+      } catch (err) {
+        console.log(`Port ${port} failed, trying next...`);
+        continue;
       }
-      setIsProcessing(false);
     }
-  };
 
-  const handleDownload = async () => {
-    if (!processedImage) return;
-    
-    try {
-      // Extract filename from URL
-      const filename = processedImage.split('/').pop() || 'colorized_image.jpg';
-      
-      // Create a link and trigger download
-      const link = document.createElement('a');
-      link.href = processedImage;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error('Download error:', err);
-      setError('Failed to download image');
-    }
+    setError('Failed to connect to the server. Please try again later.');
+    setIsProcessing(false);
   };
 
   return (
@@ -112,10 +74,10 @@ export default function ColorizePage() {
         className="text-center mb-12"
       >
         <h1 className="text-4xl font-bold text-white mb-4">
-          Colorize Your SAR Image
+          Process Your Image
         </h1>
         <p className="text-gray-300 text-lg">
-          Upload your SAR image and watch it transform into a vibrant, colorized visualization
+          Upload your image and see it transformed
         </p>
       </motion.div>
 
@@ -129,7 +91,7 @@ export default function ColorizePage() {
           <p className="text-lg mb-2 text-white">
             {isDragActive ? 'Drop the image here' : 'Drag & drop an image here, or click to select'}
           </p>
-          <p className="text-sm text-gray-400">Supports PNG, JPG, JPEG (max 10MB)</p>
+          <p className="text-sm text-gray-400">Supports PNG, JPG, JPEG</p>
         </div>
 
         {error && (
@@ -152,20 +114,12 @@ export default function ColorizePage() {
           
           {processedImage && (
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-white">Colorized Image</h3>
-              <div className="relative">
-                <img
-                  src={processedImage}
-                  alt="Colorized"
-                  className="w-full rounded-lg shadow-lg"
-                />
-                <button
-                  onClick={handleDownload}
-                  className="absolute bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  Download
-                </button>
-              </div>
+              <h3 className="text-lg font-semibold mb-2 text-white">Processed Image</h3>
+              <img
+                src={processedImage}
+                alt="Processed"
+                className="w-full rounded-lg shadow-lg"
+              />
             </div>
           )}
         </div>
@@ -174,10 +128,10 @@ export default function ColorizePage() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={handleColorize}
+            onClick={handleProcess}
             className="mt-8 w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
           >
-            Colorize Image
+            Process Image
           </motion.button>
         )}
 
