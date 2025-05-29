@@ -1,15 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion } from 'framer-motion';
-import axios from 'axios';
-
-// Try different ports if one fails
-const PORTS = [5001, 5002, 5003, 5004, 5005];
+import { uploadAndProcessImage } from '../services/api';
 
 export default function ColorizePage() {
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,33 +34,30 @@ export default function ColorizePage() {
     
     setIsProcessing(true);
     setError(null);
-
-    // Try each port until one works
-    for (const port of PORTS) {
-      try {
-        const formData = new FormData();
-        formData.append('file', image);
-
-        const response = await axios.post(`http://localhost:${port}/process`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 5000, // 5 second timeout
-        });
-
-        if (response.data.imageUrl) {
-          setProcessedImage(`http://localhost:${port}${response.data.imageUrl}`);
-          setIsProcessing(false);
-          return;
-        }
-      } catch (err) {
-        console.log(`Port ${port} failed, trying next...`);
-        continue;
+    
+    // Start progress simulation
+    let progress = 0;
+    const randomTime = Math.floor(Math.random() * (45 - 25 + 1)) + 25;
+    const progressInterval = setInterval(() => {
+      progress += 100 / (randomTime * 2); // Update twice per second
+      if (progress >= 100) {
+        progress = 99; // Cap at 99% until actual completion
+        clearInterval(progressInterval);
       }
-    }
+      setProcessingProgress(progress);
+    }, 500);
 
-    setError('Failed to connect to the server. Please try again later.');
-    setIsProcessing(false);
+    try {
+      const result = await uploadAndProcessImage(image);
+      setProcessingProgress(100);
+      setProcessedImage(result);
+    } catch (err) {
+      console.error('Error processing image:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process image. Please try again.');
+    } finally {
+      clearInterval(progressInterval);
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -120,6 +115,13 @@ export default function ColorizePage() {
                 alt="Processed"
                 className="w-full rounded-lg shadow-lg"
               />
+              <a
+                href={processedImage}
+                download={`colorized-image-${new Date().getTime()}.png`}
+                className="mt-4 block w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-2 px-4 rounded-lg font-semibold text-center hover:shadow-lg hover:shadow-green-500/25 transition-all"
+              >
+                Download Image
+              </a>
             </div>
           )}
         </div>
@@ -137,8 +139,18 @@ export default function ColorizePage() {
 
         {isProcessing && (
           <div className="mt-8 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-            <p className="mt-2 text-gray-300">Processing image...</p>
+            <div className="w-full bg-gray-700 rounded-full h-2.5 mb-4">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-purple-600 h-2.5 rounded-full transition-all duration-300" 
+                style={{ width: `${processingProgress}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-center space-x-3">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+              <p className="text-gray-300">
+                Generating image... {Math.round(processingProgress)}%
+              </p>
+            </div>
           </div>
         )}
       </div>

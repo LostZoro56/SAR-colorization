@@ -1,42 +1,26 @@
-const API_BASE_URL = 'http://localhost:5000/api'; // Update with your backend URL
+const API_BASE_URL = 'http://localhost:9000'; // FastAPI backend URL
 
 export const uploadAndProcessImage = async (imageFile) => {
   try {
-    // Step 1: Upload image to backend
     const formData = new FormData();
-    formData.append('image', imageFile);
+    formData.append('file', imageFile);
 
-    const uploadResponse = await fetch(`${API_BASE_URL}/upload`, {
+    const response = await fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
       body: formData,
+      // Don't set Content-Type header, let the browser set it with the correct boundary
     });
 
-    if (!uploadResponse.ok) {
-      throw new Error('Failed to upload image');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Failed to process image');
     }
 
-    const { jobId } = await uploadResponse.json();
-
-    // Step 2: Poll for processing status
-    let processedImageUrl = null;
-    while (!processedImageUrl) {
-      const statusResponse = await fetch(`${API_BASE_URL}/status/${jobId}`);
-      const { status, imageUrl } = await statusResponse.json();
-
-      if (status === 'completed') {
-        processedImageUrl = imageUrl;
-        break;
-      } else if (status === 'failed') {
-        throw new Error('Image processing failed');
-      }
-
-      // Wait for 2 seconds before polling again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    return processedImageUrl;
+    // Return the image blob URL
+    const imageBlob = await response.blob();
+    return URL.createObjectURL(imageBlob);
   } catch (error) {
     console.error('Error processing image:', error);
     throw error;
   }
-}; 
+};

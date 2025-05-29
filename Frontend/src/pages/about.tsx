@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 
 const fadeInUp = {
@@ -14,27 +13,6 @@ const staggerContainer = {
     }
   }
 };
-
-const teamMembers = [
-  {
-    name: "Vaibhav Sharma",
-    role: "Lead Developer",
-    image: "/team/vaibhav.jpg",
-    bio: "Passionate about computer vision and deep learning"
-  },
-  {
-    name: "Team Member 2",
-    role: "ML Engineer",
-    image: "/team/member2.jpg",
-    bio: "Expert in SAR image processing"
-  },
-  {
-    name: "Team Member 3",
-    role: "Frontend Developer",
-    image: "/team/member3.jpg",
-    bio: "Specialized in modern web technologies"
-  }
-];
 
 const features = [
   {
@@ -164,37 +142,7 @@ export default function AboutPage() {
             </div>
           </div>
         </motion.div>
-
-        {/* Team Section */}
-        <motion.div
-          variants={fadeInUp}
-          initial="initial"
-          animate="animate"
-          className="mb-16"
-        >
-          <h2 className="text-3xl font-bold text-white mb-8 text-center">Our Team</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {teamMembers.map((member, index) => (
-              <motion.div
-                key={index}
-                variants={fadeInUp}
-                className="bg-gray-800/30 rounded-xl p-6 shadow-lg backdrop-blur-sm border border-gray-700 text-center"
-              >
-                <div className="w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden border-4 border-blue-500">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">{member.name}</h3>
-                <p className="text-blue-400 mb-2">{member.role}</p>
-                <p className="text-gray-300">{member.bio}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
       </div>
     </div>
   );
-} 
+}

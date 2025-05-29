@@ -1,159 +1,113 @@
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
 import os
-import uuid
-import requests
-import json
-import time
-from werkzeug.utils import secure_filename
-from dotenv import load_dotenv
-import base64
-from PIL import Image
 import io
+import time
+import random
+import asyncio
+import onnxruntime
+import numpy as np
+from PIL import Image
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-# Load environment variables
-load_dotenv()
+app = FastAPI(title="SAR Image Colorization API")
 
-app = Flask(__name__)
-CORS(app)
+# Configure CORS for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
-# Configuration
-UPLOAD_FOLDER = 'uploads'
-PROCESSED_FOLDER = 'processed'
-# Use Kaggle notebook URL instead of local model server
-KAGGLE_MODEL_URL = os.getenv('KAGGLE_MODEL_URL', 'https://your-kaggle-notebook-url.kaggle.net')
+# Load the ONNX model
+try:
+    onnx_model_path = "sar2rgb.onnx"
+    sess = onnxruntime.InferenceSession(onnx_model_path)
+    print(f"Model loaded successfully from {onnx_model_path}")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    raise
 
-# Create directories if they don't exist
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-
-# Store processing status
-processing_status = {}
-
-def encode_image_to_base64(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
-
-def decode_base64_to_image(base64_string):
-    image_data = base64.b64decode(base64_string)
-    return Image.open(io.BytesIO(image_data))
-
-@app.route('/api/upload', methods=['POST'])
-def upload_image():
+# Function to process the input and make predictions
+def predict(input_image):
     try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
+        # Preprocess the input image
+        input_image = input_image.resize((256, 256))  # Resize to model input size
         
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
-
-        # Generate unique filename
-        filename = secure_filename(file.filename)
-        unique_id = str(uuid.uuid4())
-        file_extension = os.path.splitext(filename)[1]
-        new_filename = f"{unique_id}{file_extension}"
+        # Convert to numpy array and preprocess
+        input_array = np.array(input_image).transpose(2, 0, 1)  # HWC to CHW
+        input_array = input_array.astype(np.float32) / 255.0  # [0,1]
+        input_array = (input_array - 0.5) / 0.5  # [-1,1] 
+        input_array = np.expand_dims(input_array, axis=0)  # Add batch dimension
         
-        # Save the uploaded file
-        file_path = os.path.join(UPLOAD_FOLDER, new_filename)
-        file.save(file_path)
+        # Run the model
+        inputs = {sess.get_inputs()[0].name: input_array}
+        output = sess.run(None, inputs)
         
-        # Initialize processing status
-        processing_status[unique_id] = {
-            'status': 'processing',
-            'image_path': None,
-            'start_time': time.time()
-        }
+        # Post-process the output image
+        output_image = output[0].squeeze().transpose(1, 2, 0)  # CHW to HWC
+        output_image = (output_image + 1) / 2  # [-1,1] to [0,1]
+        output_image = (output_image * 255).astype(np.uint8)  # [0,1] to [0,255]
         
-        # Forward to Kaggle model server
-        forward_to_kaggle(file_path, unique_id)
-        
-        return jsonify({
-            'jobId': unique_id,
-            'message': 'Image uploaded successfully'
-        })
-        
+        return Image.fromarray(output_image)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in prediction: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
-def forward_to_kaggle(file_path, job_id):
+@app.get("/")
+def read_root():
+    return {"message": "SAR Image Colorization API is running"}
+
+@app.post("/upload")
+async def upload_image(file: UploadFile = File(...)):
     try:
-        # Prepare the file for upload to Kaggle
-        files = {'image': open(file_path, 'rb')}
+        # Validate file type
+        if not file.content_type.startswith('image/'):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Uploaded file is not an image"}
+            )
         
-        # Send request to Kaggle model server
-        response = requests.post(f"{KAGGLE_MODEL_URL}/api/colorize", files=files)
+        # Read the image file
+        contents = await file.read()
+        input_image = Image.open(io.BytesIO(contents))
         
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('success') and data.get('colorizedImageUrl'):
-                # Download the colorized image from Kaggle
-                colorized_url = f"{KAGGLE_MODEL_URL}{data['colorizedImageUrl']}"
-                colorized_response = requests.get(colorized_url)
-                
-                if colorized_response.status_code == 200:
-                    # Save the colorized image
-                    output_filename = f"{job_id}_colorized.png"
-                    output_path = os.path.join(PROCESSED_FOLDER, output_filename)
-                    
-                    with open(output_path, 'wb') as f:
-                        f.write(colorized_response.content)
-                    
-                    # Update processing status
-                    processing_status[job_id]['status'] = 'completed'
-                    processing_status[job_id]['image_path'] = output_path
-                else:
-                    processing_status[job_id]['status'] = 'failed'
-                    processing_status[job_id]['error'] = 'Failed to download colorized image'
-            else:
-                processing_status[job_id]['status'] = 'failed'
-                processing_status[job_id]['error'] = 'Invalid response from model server'
-        else:
-            processing_status[job_id]['status'] = 'failed'
-            processing_status[job_id]['error'] = f'Model server error: {response.text}'
-            
-    except Exception as e:
-        processing_status[job_id]['status'] = 'failed'
-        processing_status[job_id]['error'] = str(e)
-
-@app.route('/api/status/<job_id>', methods=['GET'])
-def get_status(job_id):
-    if job_id not in processing_status:
-        return jsonify({'error': 'Job not found'}), 404
+        # Convert to RGB if needed
+        if input_image.mode != "RGB":
+            input_image = input_image.convert("RGB")
+        
+        # Simulate processing time with a random delay between 25-45 seconds
+        processing_time = random.uniform(25, 45)
+        print(f"Processing image... (simulated time: {processing_time:.2f} seconds)")
+        await asyncio.sleep(processing_time)
+        
+        # Process the image
+        output_image = predict(input_image)
+        
+        # Convert the output image to bytes
+        img_byte_arr = io.BytesIO()
+        output_image.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        # Return the image as a downloadable file
+        filename = f"colorized_{file.filename}"
+        return StreamingResponse(
+            content=img_byte_arr,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
     
-    status_info = processing_status[job_id]
-    
-    if status_info['status'] == 'completed':
-        return jsonify({
-            'status': 'completed',
-            'imageUrl': f'/api/processed/{job_id}_colorized.png'
-        })
-    elif status_info['status'] == 'failed':
-        return jsonify({
-            'status': 'failed',
-            'error': status_info.get('error', 'Processing failed')
-        })
-    else:
-        # Check if processing has timed out (5 minutes)
-        if time.time() - status_info['start_time'] > 300:
-            status_info['status'] = 'failed'
-            status_info['error'] = 'Processing timed out'
-            return jsonify({
-                'status': 'failed',
-                'error': 'Processing timed out'
-            })
-        
-        return jsonify({
-            'status': 'processing',
-            'message': 'Image is being processed'
-        })
-
-@app.route('/api/processed/<filename>', methods=['GET'])
-def get_processed_image(filename):
-    try:
-        return send_file(os.path.join(PROCESSED_FOLDER, filename))
     except Exception as e:
-        return jsonify({'error': str(e)}), 404
+        print(f"Error processing upload: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error processing image: {str(e)}"}
+        )
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000) 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=9000)
